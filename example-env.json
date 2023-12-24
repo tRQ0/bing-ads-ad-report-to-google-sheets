@@ -1,0 +1,7 @@
+{
+    "CLIENT_ID": "",
+    "DEVELOPER_TOKEN": "",
+    "ENVIRONMENT": "production",
+    "DEFAULT_SPREADSHEET_ID": "",
+    "DEFAULT_SPREADSHEET_RANGE": "Sheet name!A1:P"
+}
