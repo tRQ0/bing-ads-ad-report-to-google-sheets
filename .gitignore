@@ -1,0 +1,8 @@
+**/refresh.txt
+**/data/
+__pycache__/
+*.code-workspace
+**/log/
+**/credentials/
+.vscode
+venv/
