@@ -2,7 +2,7 @@ import logging
 import os
 
 class StaticLogger():
-    def setup_logger(log_file="app.log"):
+    def __init__(self, log_file = "app.log"):
         if not os.path.exists(log_file):
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
