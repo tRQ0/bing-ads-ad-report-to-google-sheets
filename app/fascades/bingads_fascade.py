@@ -33,7 +33,7 @@ class BingadsFascade():
             environment=self.__get_environment(),
         )
         return customer_service
-        
+
     """
     Setters definition start
     """
@@ -228,5 +228,6 @@ class BingadsFascade():
             suds_object.__setitem__(element[0], None)
         return suds_object
 
+    
     def bootstrap(self):
         self.authenticate(self.__get_authorization_data(), self.__get_customer_service())
