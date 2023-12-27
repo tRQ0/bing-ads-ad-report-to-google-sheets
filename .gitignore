@@ -7,3 +7,5 @@ __pycache__/
 .vscode
 venv/
 env.json
+src/bingads_implementation.py
+src/microsoft_auth.py

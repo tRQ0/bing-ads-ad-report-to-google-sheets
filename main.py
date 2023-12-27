@@ -1,7 +1,8 @@
 import os
 import json
-from app.logger.logger import StaticLogger
-from app.fascades.bingads_fascade import BingadsFascade
+import time
+from src.app.logger.logger import StaticLogger
+from src.app.fascades.bingads_fascade import BingadsFascade
 from datetime import datetime, timedelta, timezone
 
 def main():
@@ -9,8 +10,7 @@ def main():
     # Get script path
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    logger = StaticLogger()
-    logger.setup_logger(os.path.join(script_dir, "log/app.log"))
+    logger = StaticLogger(os.path.join(script_dir, "log/app.log"))
 
     # Required
     with open(os.path.join(script_dir, "env.json"), 'r') as file:
@@ -22,10 +22,10 @@ def main():
         "ENVIRONMENT": ENVIRONMENT_INFO["ENVIRONMENT"],
         "REFRESH_TOKEN": os.path.join(script_dir, "credentials/refresh.txt"),
         # Optional
-        "CLIENT_STATE": None,
+        "CLIENT_STATE": int(time.time()),
         }
 
-    bingads_adapter = BingadsFascade(env, logger)
-    bingads_adapter.bootstrap()
+    bingads_fascade = BingadsFascade(env, logger)
+    bingads_fascade.bootstrap()
 
 main()
