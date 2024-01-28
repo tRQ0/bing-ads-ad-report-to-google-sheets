@@ -17,28 +17,28 @@ class BingadsFascade(AdsReportFactory) :
 
     def __init__(self, app_env, logger = None):
         self.logger = logger or None
-        self.__set_app_env(app_env)
-        self.__set_authorization_data(self.__make_authorization_data())       
-        # self.ads_report_factory = AdsReportFactory(self.__get_customer_service, self.__get_authorization_data())
+        self._set_app_env(app_env)
+        self._set_authorization_data(self._make_authorization_data())       
+        # self.ads_report_factory = AdsReportFactory(self._get_customer_service, self._get_authorization_data())
 
     """
     FACTORIES
     """
-    def __make_authorization_data(self):
+    def _make_authorization_data(self):
         authorization_data=AuthorizationData(
             account_id=None,
             customer_id=None,
-            developer_token=self.__get_developer_token(),
+            developer_token=self._get_developer_token(),
             authentication=None,
         )
         return authorization_data
 
-    def __make_service(self, service_name):
+    def _make_service(self, service_name):
         service = ServiceClient(
             service = service_name,
-            version = self.__get_version(),
-            authorization_data = self.__get_authorization_data(),
-            environment = self.__get_environment()
+            version = self._get_version(),
+            authorization_data = self._get_authorization_data(),
+            environment = self._get_environment()
         )
 
         return service
@@ -47,45 +47,39 @@ class BingadsFascade(AdsReportFactory) :
     Setters definition start
     """
 
-    def __set_app_env(self, app_env):
+    def _set_app_env(self, app_env):
         self.app_env = app_env
         
         return self
 
-    def __set_authorization_data(self, authorization_data):
+    def _set_authorization_data(self, authorization_data):
         self.authorization_data = authorization_data
 
         return self
-
-    def __set_customer_service(self, customer_service):
-        self.customer_service = customer_service
-
-        return self
-
     
     """
     Getters definition start
     """
 
-    def __get_client_id(self):
+    def _get_client_id(self):
         return self.app_env["CLIENT_ID"]
 
-    def __get_developer_token(self):
+    def _get_developer_token(self):
         return self.app_env["DEVELOPER_TOKEN"]
 
-    def __get_environment(self):
+    def _get_environment(self):
         return self.app_env["ENVIRONMENT"]
 
-    def __get_version(self):
+    def _get_version(self):
         return self.app_env["VERSION"]
 
-    def __get_refresh_token_path(self):
+    def _get_refresh_token_path(self):
         return self.app_env["REFRESH_TOKEN"]
 
-    def __get_client_state(self):
+    def _get_client_state(self):
         return self.app_env["CLIENT_STATE"]
 
-    def __get_authorization_data(self):
+    def _get_authorization_data(self):
         return self.authorization_data
      
     """
@@ -94,15 +88,15 @@ class BingadsFascade(AdsReportFactory) :
 
     def authenticate(self, authorization_data):
         # You should authenticate for Bing Ads API service operations with a Microsoft Account.
-        self.__authenticate_with_oauth(authorization_data)
+        self._authenticate_with_oauth(authorization_data)
 
-        customer_service = self.__make_service('CustomerManagementService')
+        customer_service = self._make_service('CustomerManagementService')
         # Set to an empty user identifier to get the current authenticated Microsoft Advertising user,
         # and then search for all accounts the user can access.
         user = customer_service.GetUser(
             UserId=None
         ).User
-        accounts=self.__search_accounts_by_user_id(customer_service, user.Id)
+        accounts=self._search_accounts_by_user_id(customer_service, user.Id)
 
         # Collect all associated accounts with name and id
         authorization_data.accounts = [{"Id": account["Id"], "Name": account["Name"]} for account in accounts["AdvertiserAccount"]]
@@ -111,38 +105,38 @@ class BingadsFascade(AdsReportFactory) :
 
         return authorization_data
 
-    def __authenticate_with_oauth(self, authorization_data):
+    def _authenticate_with_oauth(self, authorization_data):
         authentication=OAuthDesktopMobileAuthCodeGrant(
-            client_id=self.__get_client_id(),
-            env=self.__get_environment()
+            client_id=self._get_client_id(),
+            env=self._get_environment()
         )
 
         # It is recommended that you specify a non guessable 'state' request parameter to help prevent
         # cross site request forgery (CSRF). 
-        authentication.state=self.__get_client_state
+        authentication.state=self._get_client_state
 
         # Assign this authentication instance to the authorization_data. 
         authorization_data.authentication=authentication   
 
         # Register the callback function to automatically save the refresh token anytime it is refreshed.
         # Uncomment this line if you want to store your refresh token. Be sure to save your refresh token securely.
-        authorization_data.authentication.token_refreshed_callback = self.__save_refresh_token_to_file
+        authorization_data.authentication.token_refreshed_callback = self._save_refresh_token_to_file
 
-        refresh_token = self.__get_refresh_token_from_file(self.__get_refresh_token_path())
+        refresh_token = self._get_refresh_token_from_file(self._get_refresh_token_path())
 
         try:
             # If we have a refresh token let's refresh it
             if refresh_token is not None:
                 authorization_data.authentication.request_oauth_tokens_by_refresh_token(refresh_token)
-                self.__set_authorization_data(authorization_data)
+                self._set_authorization_data(authorization_data)
             else:
-                self.__request_user_consent(authorization_data)
+                self._request_user_consent(authorization_data)
         except OAuthTokenRequestException:
             # The user could not be authenticated or the grant is expired. 
             # The user must first sign in and if needed grant the client application access to the requested scope.
-           self.__request_user_consent(authorization_data)
+           self._request_user_consent(authorization_data)
 
-    def __request_user_consent(self, authorization_data):
+    def _request_user_consent(self, authorization_data):
         self.logger.log_message("user authentication required", level=logging.WARNING)
 
         auth_link = authorization_data.authentication.get_authorization_endpoint()
@@ -168,14 +162,14 @@ class BingadsFascade(AdsReportFactory) :
                 "please enter the response URI that includes the authorization 'code' parameter: \n"
             )
 
-        if authorization_data.authentication.state != self.__get_client_state():
+        if authorization_data.authentication.state != self._get_client_state():
             # self.logger.log_message("The OAuth response state does not match the client request state.", level=logging.ERROR)
             raise Exception("The OAuth response state does not match the client request state.")
 
         # Request access and refresh tokens using the URI that you provided manually during program execution.
         authorization_data.authentication.request_oauth_tokens_by_response_uri(response_uri=response_uri) 
 
-    def __get_refresh_token_from_file(self, file_name):
+    def _get_refresh_token_from_file(self, file_name):
         ''' 
         Returns a refresh token if found.
         '''
@@ -190,16 +184,16 @@ class BingadsFascade(AdsReportFactory) :
                 file.close()
             return "Error while reading refresh token"
 
-    def __save_refresh_token_to_file(self, oauth_tokens):
+    def _save_refresh_token_to_file(self, oauth_tokens):
         ''' 
         Stores a refresh token locally. Be sure to save your refresh token securely.
         '''
-        with open(self.__get_refresh_token_path(),"w+") as file:
+        with open(self._get_refresh_token_path(),"w+") as file:
             file.write(oauth_tokens.refresh_token)
             file.close()
         return None
     
-    def __search_accounts_by_user_id(self, customer_service, user_id):
+    def _search_accounts_by_user_id(self, customer_service, user_id):
         predicates={
             'Predicate': [
                 {
@@ -271,7 +265,7 @@ class BingadsFascade(AdsReportFactory) :
             week_number = dt.isocalendar()[1]
             endDate = self.date_validation(end_date)
 
-            reporting_service = self.__make_service('ReportingService')
+            reporting_service = self._make_service('ReportingService')
 
             if qry_type in ["day","daily"]:
                 aggregation = 'Daily'
@@ -352,7 +346,7 @@ class BingadsFascade(AdsReportFactory) :
             reporting_service_manager = ReportingServiceManager(
                 authorization_data=authorization_data, 
                 poll_interval_in_milliseconds=5000, 
-                environment=self.__get_environment(),
+                environment=self._get_environment(),
             )
             report_container = reporting_service_manager.download_report(reporting_download_parameters)
             columns = report_request.Columns.AdPerformanceReportColumn[0]
@@ -459,8 +453,8 @@ class BingadsFascade(AdsReportFactory) :
     
     def bootstrap(self):
 
-        authorization_data = self.authenticate(self.__get_authorization_data())
-        self.__set_authorization_data(authorization_data)
+        authorization_data = self.authenticate(self._get_authorization_data())
+        self._set_authorization_data(authorization_data)
 
         qry_type = 'daily'
 
