@@ -1,27 +1,30 @@
 import src.bingads_implementation as bingads_implementation
 import sys
 import pandas as pd
+import logging
 
 import src.app.utils.utils as utils
-import src.app.factories.AdsReportFactory as AdsReportFactory
+from src.app.factories.AdsReportFactory import AdsReportFactory
 
 from datetime import datetime, timedelta
 from bingads.v13.reporting import *
 from bingads.authorization import AuthorizationData, OAuthDesktopMobileAuthCodeGrant 
 from bingads.service_client import ServiceClient
+from suds.client import Client
+from currency_converter import CurrencyConverter
 
-class BingadsFascade():
+class BingadsFascade(AdsReportFactory) :
 
     def __init__(self, app_env, logger = None):
         self.logger = logger or None
         self.__set_app_env(app_env)
-        self.__set_authorization_data(self.__authorization_data_factory())       
-        self.__set_customer_service(self.__customer_service_factory())       
+        self.__set_authorization_data(self.__make_authorization_data())       
+        # self.ads_report_factory = AdsReportFactory(self.__get_customer_service, self.__get_authorization_data())
 
     """
     FACTORIES
     """
-    def __authorization_data_factory(self):
+    def __make_authorization_data(self):
         authorization_data=AuthorizationData(
             account_id=None,
             customer_id=None,
@@ -30,14 +33,15 @@ class BingadsFascade():
         )
         return authorization_data
 
-    def __customer_service_factory(self):
-        customer_service = ServiceClient(
-            service='CustomerManagementService', 
-            version=13,
-            authorization_data=self.__get_authorization_data(), 
-            environment=self.__get_environment(),
+    def __make_service(self, service_name):
+        service = ServiceClient(
+            service = service_name,
+            version = self.__get_version(),
+            authorization_data = self.__get_authorization_data(),
+            environment = self.__get_environment()
         )
-        return customer_service
+
+        return service
 
     """
     Setters definition start
@@ -45,12 +49,18 @@ class BingadsFascade():
 
     def __set_app_env(self, app_env):
         self.app_env = app_env
+        
+        return self
 
     def __set_authorization_data(self, authorization_data):
         self.authorization_data = authorization_data
 
+        return self
+
     def __set_customer_service(self, customer_service):
         self.customer_service = customer_service
+
+        return self
 
     
     """
@@ -66,6 +76,9 @@ class BingadsFascade():
     def __get_environment(self):
         return self.app_env["ENVIRONMENT"]
 
+    def __get_version(self):
+        return self.app_env["VERSION"]
+
     def __get_refresh_token_path(self):
         return self.app_env["REFRESH_TOKEN"]
 
@@ -74,18 +87,16 @@ class BingadsFascade():
 
     def __get_authorization_data(self):
         return self.authorization_data
-    
-    def __get_customer_service(self):
-        return self.customer_service
-    
+     
     """
     Business logic
     """
 
-    def authenticate(self, authorization_data, customer_service):
+    def authenticate(self, authorization_data):
         # You should authenticate for Bing Ads API service operations with a Microsoft Account.
         self.__authenticate_with_oauth(authorization_data)
 
+        customer_service = self.__make_service('CustomerManagementService')
         # Set to an empty user identifier to get the current authenticated Microsoft Advertising user,
         # and then search for all accounts the user can access.
         user = customer_service.GetUser(
@@ -96,10 +107,8 @@ class BingadsFascade():
         # Collect all associated accounts with name and id
         authorization_data.accounts = [{"Id": account["Id"], "Name": account["Name"]} for account in accounts["AdvertiserAccount"]]
         authorization_data.customer_id=accounts['AdvertiserAccount'][0].ParentCustomerId
-        account_ids = [account_data["Id"] for account_data in authorization_data.accounts]
+        # account_ids = [account_data["Id"] for account_data in authorization_data.accounts]
 
-        # Print the list of IDs
-        print(account_ids)
         return authorization_data
 
     def __authenticate_with_oauth(self, authorization_data):
@@ -232,84 +241,84 @@ class BingadsFascade():
             suds_object.__setitem__(element[0], None)
         return suds_object
 
-    # def get_ads_report(
-    #         self,
-    #         authorization_data,
-    #         start_date,
-    #         end_date,
-    #         qry_type,
-    #         request_report_columns = [
-    #             # 'AccountId',
-    #             'AccountName',
-    #             'TimePeriod',
-    #             'CurrencyCode', 
-    #             'CampaignType', 
-    #             'Network', 
-    #             'DeviceType', 
-    #             'Clicks',
-    #             'Impressions',
-    #             'Ctr', 
-    #             'AverageCpc', 
-    #             'Spend', 
-    #             'Conversions',
-    #             'Revenue',
-    #             ],
+    def get_ads_report(
+            self,
+            authorization_data,
+            start_date,
+            end_date,
+            qry_type,
+            request_report_columns = [
+                # 'AccountId',
+                'AccountName',
+                'TimePeriod',
+                'CurrencyCode', 
+                'CampaignType', 
+                'Network', 
+                'DeviceType', 
+                'Clicks',
+                'Impressions',
+                'Ctr', 
+                'AverageCpc', 
+                'Spend', 
+                'Conversions',
+                'Revenue',
+                ],
             
-    #         ):
-    #     try:
-    #         startDate = self.date_validation(start_date)
-    #         dt = startDate+timedelta(1)
-    #         week_number = dt.isocalendar()[1]
-    #         endDate = self.date_validation(end_date)
+            ):
+        try:
+            startDate = self.date_validation(start_date)
+            dt = startDate+timedelta(1)
+            week_number = dt.isocalendar()[1]
+            endDate = self.date_validation(end_date)
 
-    #         reporting_service = self.__get_customer_service()
+            reporting_service = self.__make_service('ReportingService')
 
-    #         if qry_type in ["day","daily"]:
-    #             aggregation = 'Daily'
-    #         elif qry_type in ["week","weekly"]:
-    #             aggregation = 'Weekly'
-    #         exclude_column_headers=False
-    #         exclude_report_footer=True
-    #         exclude_report_header=False
-    #         time=reporting_service.factory.create('ReportTime')
-    #         start_date=reporting_service.factory.create('Date')
-    #         start_date.Day=startDate.day
-    #         start_date.Month=startDate.month
-    #         start_date.Year=startDate.year
-    #         time.CustomDateRangeStart=start_date
+            if qry_type in ["day","daily"]:
+                aggregation = 'Daily'
+            elif qry_type in ["week","weekly"]:
+                aggregation = 'Weekly'
+            exclude_column_headers=False
+            exclude_report_footer=True
+            exclude_report_header=False
+            time=reporting_service.factory.create('ReportTime')
+            start_date=reporting_service.factory.create('Date')
+            start_date.Day=startDate.day
+            start_date.Month=startDate.month
+            start_date.Year=startDate.year
+            time.CustomDateRangeStart=start_date
 
-    #         end_date=reporting_service.factory.create('Date')
-    #         end_date.Day=endDate.day
-    #         end_date.Month=endDate.month
-    #         end_date.Year=endDate.year
-    #         time.CustomDateRangeEnd=end_date
-    #         time.ReportTimeZone='PacificTimeUSCanadaTijuana'
-    #         return_only_complete_data=False
+            end_date=reporting_service.factory.create('Date')
+            end_date.Day=endDate.day
+            end_date.Month=endDate.month
+            end_date.Year=endDate.year
+            time.CustomDateRangeEnd=end_date
+            time.ReportTimeZone='PacificTimeUSCanadaTijuana'
+            return_only_complete_data=False
             
-    #         report_request=reporting_service.factory.create('AdPerformanceReportRequest')
-    #         report_request.Aggregation=aggregation
-    #         report_request.ExcludeColumnHeaders=exclude_column_headers
-    #         report_request.ExcludeReportFooter=exclude_report_footer
-    #         report_request.ExcludeReportHeader=exclude_report_header
-    #         report_request.Format='Csv'
-    #         report_request.ReturnOnlyCompleteData=return_only_complete_data
-    #         report_request.Time=time    
-    #         report_request.ReportName="Ads Performance Report"
-    #         scope=reporting_service.factory.create('AccountThroughAdGroupReportScope')
-    #         scope.AccountIds={'long': [account["Id"] for account in authorization_data.accounts] }
-    #         scope.Campaigns=None
-    #         report_request.Scope=scope     
+            report_request=reporting_service.factory.create('AdPerformanceReportRequest')
+            report_request.Aggregation=aggregation
+            report_request.ExcludeColumnHeaders=exclude_column_headers
+            report_request.ExcludeReportFooter=exclude_report_footer
+            report_request.ExcludeReportHeader=exclude_report_header
+            report_request.Format='Csv'
+            report_request.ReturnOnlyCompleteData=return_only_complete_data
+            report_request.Time=time    
+            report_request.ReportName="Ads Performance Report"
+            scope=reporting_service.factory.create('AccountThroughAdGroupReportScope')
+            scope.AccountIds={'long': [account["Id"] for account in authorization_data.accounts] }
+            scope.Campaigns=None
+            report_request.Scope=scope     
 
-    #         # Primary columns required in the API
-    #         report_columns=reporting_service.factory.create('ArrayOfAdPerformanceReportColumn')
-    #         report_columns.AdPerformanceReportColumn.append(request_report_columns)
-    #         report_request.Columns=report_columns
+            # Primary columns required in the API
+            report_columns=reporting_service.factory.create('ArrayOfAdPerformanceReportColumn')
+            report_columns.AdPerformanceReportColumn.append(request_report_columns)
+            report_request.Columns=report_columns
 
-    #         #return campaign_performance_report_request
-    #         return report_request
-    #     except:
-    #         self.logger.log_message(f"MS_ADS_REPORT : report processing Failed : {sys.exc_info()}", level=logging.ERROR)
-    #         print("\nMS_ADS_REPORT : report processing Failed : ", sys.exc_info())
+            #return campaign_performance_report_request
+            return report_request
+        except:
+            self.logger.log_message(f"MS_ADS_REPORT : report processing Failed : {sys.exc_info()}", level=logging.ERROR)
+            print("\nMS_ADS_REPORT : report processing Failed : ", sys.exc_info())
 
     def date_validation(self, date_text):
         try:
@@ -318,10 +327,10 @@ class BingadsFascade():
             else:
                 return datetime.strptime(date_text,'%Y-%m-%d').date()
         except:
-            self.logger.log_message("linkedin_campaign_processing : year does not match format yyyy-mm-dd", level=logging.ERROR)
-            raise Exception('linkedin_campaign_processing : year does not match format yyyy-mm-dd')
+            self.logger.log_message("date_validation_failed : year does not match format yyyy-mm-dd", level=logging.ERROR)
+            raise Exception('date_validation_failed : year does not match format yyyy-mm-dd')
 
-    def download_ads_report(self, report_request,authorization_data,start_date,end_date,qry_type):
+    def download_ads_report(self, report_request, authorization_data, start_date, end_date, qry_type):
         try:
             save_path = utils.resolve_sys_path("data")
             if not os.path.exists(save_path):
@@ -440,19 +449,21 @@ class BingadsFascade():
 
             ads_analytics_data_aggregated[columns_to_convert] = ads_analytics_data_aggregated[columns_to_convert].astype(str)
 
-
-
             return ads_analytics_data, ads_analytics_data_aggregated
+
         except:
             self.logger.log_message(f"DOWNLOAD_ADS_REPORT : processing Failed : {sys.exc_info()}", level=logging.ERROR)
             print("\nDOWNLOAD_ADS_REPORT : processing Failed : ", sys.exc_info())
 
-
+    #  # Bootstrap will be moved later   
+    
     def bootstrap(self):
-        ads_report_factory = AdsReportFactory()
 
-        authorization_data = self.authenticate(self.__get_authorization_data(), self.__get_customer_service())
+        authorization_data = self.authenticate(self.__get_authorization_data())
         self.__set_authorization_data(authorization_data)
+
+        qry_type = 'daily'
+
         # Get todays date
         current_date = datetime.now()
 
@@ -465,30 +476,14 @@ class BingadsFascade():
 
         # logger.log_message(f"fetching data for date range: {formatted_date_today} to {seven_days_ago}")
 
-        # Generate reprot_request object
-        request_report_columns = [
-                # 'AccountId',
-                'AccountName',
-                'TimePeriod',
-                'CurrencyCode', 
-                'CampaignType', 
-                'Network', 
-                'DeviceType', 
-                'Clicks',
-                'Impressions',
-                'Ctr', 
-                'AverageCpc', 
-                'Spend', 
-                'Conversions',
-                'Revenue',
-                ],
-        
-        report_request = ads_report_factory.get_ads_report(
+        # Generate report_request object
+        report_request = self.get_ads_report(
             authorization_data,
             seven_days_ago,
             formatted_date_today,
-            'daily',
-            request_report_columns,
+            qry_type
             )
-        print(report_request)
-    
+        
+        report_data, _ = self.download_ads_report(report_request, authorization_data, seven_days_ago, formatted_date_today, qry_type)
+
+        print(report_data)
